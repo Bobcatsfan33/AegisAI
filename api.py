@@ -37,12 +37,15 @@ from config import (
     ELASTICSEARCH_ENABLED,
     GCP_ENABLED,
     GCP_PROJECT_ID,
+    IAC_ENABLED,
+    K8S_ENABLED,
     NETWORK_SCAN_ENABLED,
     NETWORK_SCAN_TARGETS,
     OIDC_ISSUER,
 )
 from modules.agents.orchestrator import AIOrchestrator
 from modules.analytics.elastic import ElasticIndexer
+from modules.reports.compliance import ComplianceReportGenerator
 from modules.scanners.base import Finding
 from modules.security.audit_log import AuditEventType, AuditOutcome, log_event
 from modules.security.headers import RequestValidationMiddleware, SecurityHeadersMiddleware
@@ -162,6 +165,22 @@ def _build_scanners():
             scanners.append(s)
         else:
             logger.warning("Network scanner has no targets configured.")
+
+    if K8S_ENABLED:
+        from modules.scanners.k8s.scanner import K8sScanner
+        s = K8sScanner()
+        if s.is_available():
+            scanners.append(s)
+        else:
+            logger.warning("K8s scanner unavailable (check kubeconfig / cluster connectivity).")
+
+    if IAC_ENABLED:
+        from modules.scanners.iac.scanner import IaCScanner
+        s = IaCScanner()
+        if s.is_available():
+            scanners.append(s)
+        else:
+            logger.warning("IaC scanner: no scan paths found. Set IAC_SCAN_PATHS.")
 
     return scanners
 
@@ -391,6 +410,66 @@ def get_findings(
         detail={"action": "get_findings", "total": total, "severity_filter": severity},
     )
     return {"total": total, "offset": offset, "limit": limit, "findings": page}
+
+
+@app.get("/api/compliance")
+def get_compliance_report(
+    format: str = Query("json", description="Output format: json | markdown"),
+    tenant: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Generate a NIST 800-53 Rev5 compliance gap report from all completed scans.
+    Requires ANALYST+. OWNER receives full finding details; ANALYST receives summary.
+    CM-6 / CA-7: Continuous monitoring and compliance assessment.
+    """
+    actor = tenant.get("sub", "unknown")
+    actor_role = tenant.get("role", 0)
+
+    # Collect all findings from completed scans
+    all_findings: list[Finding] = []
+    for scan_id, data in scan_results.items():
+        if data.get("status") != "complete":
+            continue
+        for item in data.get("findings", []):
+            f_data = item.get("finding", item)
+            # Re-hydrate Finding objects for the compliance engine
+            all_findings.append(Finding(
+                resource=f_data.get("resource", ""),
+                issue=f_data.get("issue", ""),
+                severity=f_data.get("severity", "info"),
+                provider=f_data.get("provider", "unknown"),
+                region=f_data.get("region"),
+                resource_type=f_data.get("resource_type"),
+                details=f_data.get("details", {}),
+                remediation_hint=f_data.get("remediation_hint"),
+                mitre_techniques=f_data.get("mitre_techniques", []),
+                mitre_tactic=f_data.get("mitre_tactic"),
+                nist_controls=f_data.get("nist_controls", []),
+                cwe_id=f_data.get("cwe_id"),
+            ))
+
+    generator = ComplianceReportGenerator()
+    report = generator.generate(
+        all_findings,
+        metadata={"scan_count": len(scan_results), "actor": actor},
+    )
+
+    log_event(
+        AuditEventType.ACCESS_GRANTED,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={
+            "action": "compliance_report",
+            "overall_score": report.overall_score,
+            "total_findings": report.total_findings,
+        },
+    )
+
+    if format == "markdown":
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(report.to_markdown(), media_type="text/markdown")
+
+    return report.to_dict()
 
 
 @app.get("/api/audit")

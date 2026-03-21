@@ -43,6 +43,19 @@ NETWORK_SCAN_TARGETS: list[str] = [
     t.strip() for t in os.getenv("NETWORK_SCAN_TARGETS", "127.0.0.1").split(",") if t.strip()
 ]
 
+# ── Kubernetes scanning (v2.3) ────────────────────────────────────────────────
+# Requires: pip install kubernetes
+# Connects via in-cluster service account or ~/.kube/config
+K8S_ENABLED: bool = os.getenv("K8S_ENABLED", "false").lower() == "true"
+K8S_NAMESPACES: str = os.getenv("K8S_NAMESPACES", "")   # comma-separated; empty = all
+K8S_CONTEXT: str = os.getenv("K8S_CONTEXT", "")          # kubeconfig context; empty = current
+
+# ── IaC scanning (v2.3) ───────────────────────────────────────────────────────
+# Scans Terraform (.tf), CloudFormation (.yaml/.json), and Kubernetes manifests
+# for misconfigurations before they reach a cloud environment (shift-left).
+IAC_ENABLED: bool = os.getenv("IAC_ENABLED", "false").lower() == "true"
+IAC_SCAN_PATHS: str = os.getenv("IAC_SCAN_PATHS", ".")   # comma-separated dirs/files
+
 # ── SIEM integration ──────────────────────────────────────────────────────────
 # Transport 1: Generic HTTP Webhook
 # Compatible with: Graylog, Wazuh, TheHive, OpenSearch Ingest, any custom listener
