@@ -1,5 +1,5 @@
 """
-Aegis — FastAPI web service  (v2.4.0)
+Aegis — FastAPI web service  (v2.5.0)
 
 Endpoints:
   GET  /                   → health check (public)
@@ -11,7 +11,17 @@ Endpoints:
   GET  /api/stig           → DISA STIG automated assessment (ANALYST+)
   GET  /api/stig/xccdf     → XCCDF 1.2 XML export for eMASS import (ADMIN+)
   GET  /api/stig/poam      → eMASS POA&M CSV template (ADMIN+)
+  GET  /api/acas           → ACAS/Nessus vulnerability scan summary (ANALYST+)
+  GET  /api/acas/findings  → paginated ACAS findings (ANALYST+)
+  POST /api/acas/scan      → trigger on-demand ACAS pull from Tenable.sc/Nessus (ADMIN+)
   GET  /api/audit          → tail the immutable audit log (OWNER only)
+
+v2.5.0 — Active Defense + ACAS Integration:
+  - ACAS/Nessus scanner integration (Tenable.sc API, Nessus API, .nessus XML).
+  - CVSS v3/v2 severity normalization, IAVM notice ID extraction.
+  - Plugin-family → NIST 800-53 Rev5 + MITRE ATT&CK mapping.
+  - eMASS POA&M candidates auto-generated from critical/high ACAS findings.
+  - ACAS findings fed into existing compliance gap report.
 
 v2.4.0 — IL5 Foundation:
   - FIPS 140-2 startup enforcement (FATAL in IL5/IL6 if not FIPS-active).
@@ -76,7 +86,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Aegis",
     description="Autonomous multi-cloud & network security posture management",
-    version="2.4.0",
+    version="2.5.0",
     # Suppress /openapi.json and /docs in non-dev environments (reduces attack surface)
     docs_url="/docs" if DEV_MODE else None,
     redoc_url="/redoc" if DEV_MODE else None,
@@ -134,7 +144,10 @@ async def startup_checks():
         )
 
     mode = "DRY RUN" if DRY_RUN else "LIVE REMEDIATION"
-    logger.info(f"Aegis v2.4.0 starting in {mode} mode.")
+    logger.info(f"Aegis v2.5.0 starting in {mode} mode.")
+
+    acas_mode = os.getenv("ACAS_MODE", "xml")
+    logger.info("ACAS scanner mode: %s (RA-5 / SI-2)", acas_mode)
 
     if ELASTICSEARCH_ENABLED:
         if _indexer.is_available():
@@ -151,12 +164,13 @@ async def startup_checks():
         AuditEventType.STARTUP,
         AuditOutcome.SUCCESS,
         detail={
-            "version": "2.4.0",
+            "version": "2.5.0",
             "dev_mode": DEV_MODE,
             "dry_run": DRY_RUN,
             "auto_remediate": AUTO_REMEDIATE,
             "fips_active": fips_summary.get("fips_active", False),
             "fips_environment": fips_summary.get("environment", "unknown"),
+            "acas_mode": os.getenv("ACAS_MODE", "xml"),
         },
     )
 
@@ -215,6 +229,20 @@ def _build_scanners():
             scanners.append(s)
         else:
             logger.warning("IaC scanner: no scan paths found. Set IAC_SCAN_PATHS.")
+
+    # ACAS / Nessus scanner (always attempted when ACAS_MODE is set)
+    # ACAS_MODE = "tenablesc" | "nessus" | "xml" (default: xml / disabled if no path set)
+    if os.getenv("ACAS_MODE") or os.getenv("NESSUS_XML_PATH"):
+        from modules.scanners.acas.scanner import ACASScanner
+        s = ACASScanner()
+        if s.is_available():
+            scanners.append(s)
+            logger.info("ACAS scanner enabled (mode=%s)", os.getenv("ACAS_MODE", "xml"))
+        else:
+            logger.warning(
+                "ACAS scanner unavailable — check ACAS_MODE, TENABLESC_URL / "
+                "NESSUS_URL / NESSUS_XML_PATH in .env"
+            )
 
     return scanners
 
@@ -658,3 +686,178 @@ def get_audit_log(
 
     tail = entries[-limit:]
     return {"entries": tail, "total": len(entries)}
+
+
+# ── ACAS / Nessus Endpoints ────────────────────────────────────────────────────
+# RA-5 (Vulnerability Scanning), SI-2 (Flaw Remediation), CM-6 (Configuration)
+# All endpoints require ANALYST+ — ACAS findings are sensitive vulnerability data.
+
+# In-memory cache of last ACAS scan results (replace with Redis for multi-replica)
+_acas_cache: dict[str, Any] = {
+    "findings": [],
+    "summary":  None,
+    "scan_id":  None,
+    "scanned_at": None,
+}
+
+
+@app.get("/api/acas")
+async def acas_summary(
+    _user: dict = Depends(verify_token),
+    _role: Any = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return ACAS/Nessus vulnerability scan summary.
+
+    Summary includes:
+      - Severity counts (critical / high / medium / low)
+      - Unique host count and unique CVE count
+      - Open IAVM notice IDs (DoD IA Vulnerability Management)
+      - Top 10 most frequent plugins
+      - Top 10 most vulnerable hosts
+      - POA&M candidates (critical + high + IAVM findings for eMASS)
+
+    ACAS data is sourced from the most recent scan run (GET /api/acas/scan)
+    or from the background scan (POST /scan) when ACAS_MODE is configured.
+    RA-5 / SI-2 / CM-6.
+    """
+    from modules.scanners.acas.scanner import ACASScanner, build_summary
+
+    if not _acas_cache["summary"]:
+        # No cached results — attempt a fresh pull if scanner is available
+        scanner = ACASScanner()
+        if not scanner.is_available():
+            return {
+                "status": "unavailable",
+                "message": (
+                    "ACAS scanner not configured. Set ACAS_MODE + credentials "
+                    "or NESSUS_XML_PATH in .env to enable vulnerability scanning."
+                ),
+            }
+        findings = scanner.scan()
+        _acas_cache["findings"] = [f.to_dict() for f in findings]
+        _acas_cache["summary"]  = build_summary(findings).to_dict()
+        _acas_cache["scanned_at"] = _acas_cache["summary"]["generated_at"]
+
+    return {
+        "scan_id":    _acas_cache["scan_id"],
+        "scanned_at": _acas_cache["scanned_at"],
+        "summary":    _acas_cache["summary"],
+    }
+
+
+@app.get("/api/acas/findings")
+async def acas_findings(
+    severity: str = Query(default="", description="Filter by severity (critical|high|medium|low)"),
+    host: str     = Query(default="", description="Filter by hostname or IP (partial match)"),
+    cve: str      = Query(default="", description="Filter by CVE ID (partial match)"),
+    limit: int    = Query(default=100, le=1000),
+    offset: int   = Query(default=0, ge=0),
+    _user: dict   = Depends(verify_token),
+    _role: Any    = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return paginated ACAS/Nessus finding details with optional filters.
+
+    Each finding includes: resource, issue, severity, CVSS scores, CVE list,
+    IAVM IDs, plugin family, NIST 800-53 controls, MITRE ATT&CK techniques,
+    and remediation guidance.
+    """
+    from modules.scanners.acas.scanner import ACASScanner, build_summary
+
+    if not _acas_cache["findings"]:
+        scanner = ACASScanner()
+        if not scanner.is_available():
+            return {"findings": [], "total": 0, "offset": offset, "limit": limit}
+        findings = scanner.scan()
+        _acas_cache["findings"] = [f.to_dict() for f in findings]
+        _acas_cache["summary"]  = build_summary(findings).to_dict()
+        _acas_cache["scanned_at"] = _acas_cache["summary"]["generated_at"]
+
+    all_f = _acas_cache["findings"]
+
+    # Apply filters
+    if severity:
+        all_f = [f for f in all_f if f.get("severity", "").lower() == severity.lower()]
+    if host:
+        host_lower = host.lower()
+        all_f = [
+            f for f in all_f
+            if host_lower in (f.get("details", {}).get("hostname", "") or "").lower()
+            or host_lower in (f.get("details", {}).get("ip", "") or "").lower()
+        ]
+    if cve:
+        cve_lower = cve.lower()
+        all_f = [
+            f for f in all_f
+            if any(cve_lower in c.lower() for c in f.get("details", {}).get("cves", []))
+        ]
+
+    total = len(all_f)
+    page  = all_f[offset: offset + limit]
+
+    return {
+        "findings": page,
+        "total":    total,
+        "offset":   offset,
+        "limit":    limit,
+        "filtered_by": {
+            "severity": severity or None,
+            "host":     host or None,
+            "cve":      cve or None,
+        },
+    }
+
+
+@app.post("/api/acas/scan", status_code=202)
+async def acas_trigger_scan(
+    background_tasks: BackgroundTasks,
+    _user: dict = Depends(verify_token),
+    _role: Any  = Depends(require_role(Role.ADMIN)),
+):
+    """
+    Trigger an on-demand ACAS/Nessus pull from the configured source.
+
+    Runs in the background; poll GET /api/acas for updated results.
+    ADMIN+ required — triggers external API calls to Tenable.sc / Nessus.
+    RA-5 / CM-6.
+    """
+    from modules.scanners.acas.scanner import ACASScanner, build_summary
+
+    actor = _user.get("sub", "unknown")
+
+    def _run_acas():
+        scanner = ACASScanner()
+        if not scanner.is_available():
+            logger.warning("[ACAS] Scan triggered by %s but scanner unavailable", actor)
+            return
+        logger.info("[ACAS] On-demand scan triggered by %s", actor)
+        findings = scanner.scan()
+        summary  = build_summary(findings)
+        _acas_cache["findings"]   = [f.to_dict() for f in findings]
+        _acas_cache["summary"]    = summary.to_dict()
+        _acas_cache["scanned_at"] = summary.generated_at
+        logger.info(
+            "[ACAS] On-demand scan complete: %d findings (%d critical, %d high)",
+            summary.total_findings, summary.critical, summary.high,
+        )
+        log_event(
+            AuditEventType.STARTUP,       # reuse closest available type
+            AuditOutcome.SUCCESS,
+            detail={
+                "action":        "acas_scan",
+                "triggered_by":  actor,
+                "total":         summary.total_findings,
+                "critical":      summary.critical,
+                "high":          summary.high,
+                "iavm_open":     summary.iavm_open,
+            },
+        )
+
+    background_tasks.add_task(_run_acas)
+
+    return {
+        "status":  "queued",
+        "message": "ACAS scan started. Poll GET /api/acas for results.",
+        "actor":   actor,
+    }

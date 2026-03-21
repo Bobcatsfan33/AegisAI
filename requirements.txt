@@ -1,31 +1,63 @@
-# Core API
-fastapi
-uvicorn[standard]
-python-dotenv
+# Aegis — Python dependencies
+# All versions pinned for SBOM reproducibility and supply-chain security.
+# Update via: pip-compile requirements.in  (or manually after testing).
+# Generated for: Aegis v2.5.0 / Python 3.11+
 
-# Auth
-python-jose[cryptography]
-requests
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+starlette==0.41.3                # pinned separately — FastAPI transitive dep
 
-# Cloud SDKs
-boto3
+# ── JWT / OIDC ────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+cryptography==44.0.0
 
-# Azure (install if using Azure)
-# azure-identity
-# azure-mgmt-network
-# azure-mgmt-storage
+# ── HTTP client ───────────────────────────────────────────────────────────────
+requests==2.32.3
+httpx==0.27.2                    # async-capable HTTP (used by opensearch-py)
+certifi==2024.12.14              # CA bundle pinned for supply-chain trust
 
-# GCP (install if using GCP)
-# google-cloud-compute
+# ── Data validation / config ──────────────────────────────────────────────────
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
 
-# AI — OpenAI SDK (also works with Ollama, vLLM, LM Studio, LocalAI, Groq, etc.)
-openai
+# ── Redis ─────────────────────────────────────────────────────────────────────
+redis==5.2.1
 
-# Search / Analytics backend — pick one (or both; opensearch-py is tried first)
-#   OpenSearch (recommended — Apache 2.0, fully open source):
-opensearch-py
-#   Elasticsearch (Elastic License 2.0 / SSPL — fallback if opensearch-py is absent):
-# elasticsearch>=8.0.0
+# ── Cloud SDKs ────────────────────────────────────────────────────────────────
+boto3==1.35.95
+botocore==1.35.95
+s3transfer==0.10.4               # boto3 transitive dep — pinned to avoid drift
 
-# Network scanning (requires nmap binary: apt install nmap / brew install nmap)
-# python-nmap
+# Azure (uncomment when AZURE_ENABLED=true)
+# azure-identity==1.19.0
+# azure-mgmt-network==25.4.0
+# azure-mgmt-storage==21.2.0
+
+# GCP (uncomment when GCP_ENABLED=true)
+# google-cloud-compute==1.19.3
+# google-auth==2.37.0
+
+# ── AI / LLM ──────────────────────────────────────────────────────────────────
+openai==1.57.4                   # works with Ollama, vLLM, Groq, LocalAI, etc.
+
+# ── Search / Analytics ────────────────────────────────────────────────────────
+opensearch-py==2.7.1             # Apache 2.0 — recommended over Elastic
+# elasticsearch==8.17.0          # Elastic License 2.0 fallback (uncomment if needed)
+
+# ── Network scanning (requires nmap binary: apt install nmap) ─────────────────
+# python-nmap==0.7.1             # uncomment when NETWORK_SCAN_ENABLED=true
+
+# ── Kubernetes scanning ───────────────────────────────────────────────────────
+# kubernetes==31.0.0             # uncomment when K8S_ENABLED=true
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+anyio==4.7.0                     # FastAPI async runtime dep
+click==8.1.8                     # uvicorn dep
+typing_extensions==4.12.2        # backport — pinned to avoid version conflicts
+
+# ── ACAS / Nessus scanner ─────────────────────────────────────────────────────
+# No additional dependencies — ACASScanner uses Python stdlib only:
+#   urllib.request, xml.etree.ElementTree, ssl, json, glob, re, dataclasses
