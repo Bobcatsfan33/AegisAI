@@ -16,6 +16,15 @@ Endpoints:
   POST /api/acas/scan      → trigger on-demand ACAS pull from Tenable.sc/Nessus (ADMIN+)
   GET  /api/audit          → tail the immutable audit log (OWNER only)
 
+v2.9.0 — eMASS SSP Auto-Generator:
+  - GET /api/ssp       — live SSP JSON (eMASS API import payload)
+  - GET /api/ssp/csv   — eMASS Controls worksheet CSV (bulk upload format)
+  - GET /api/ssp/md    — Markdown narrative for DAA review package
+  - AegisSspGenerator pulls live posture data: FIPS, STIG, ACAS, mTLS, encryption.
+  - 42 NIST 800-53 Rev5 controls auto-assessed across 9 control families.
+  - Auto-generated POA&M entries from ACAS findings, mTLS gaps, FIPS gaps.
+  - NIST CA-2, CA-5, CA-6, CA-7, PL-2 coverage.
+
 v2.8.0 — Encryption at Rest:
   - AES-256-GCM field-level envelope encryption for findings store (ClickHouse/SQLite).
   - Key providers: AWS KMS, Azure Key Vault, HashiCorp Vault, env var (dev only).
@@ -108,6 +117,7 @@ from modules.security.encryption import (
     decrypt_field,
     KeyRotator,
 )
+from modules.compliance.ssp_generator import AegisSspGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +126,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Aegis",
     description="Autonomous multi-cloud & network security posture management",
-    version="2.8.0",
+    version="2.9.0",
     # Suppress /openapi.json and /docs in non-dev environments (reduces attack surface)
     docs_url="/docs" if DEV_MODE else None,
     redoc_url="/redoc" if DEV_MODE else None,
@@ -180,7 +190,7 @@ async def startup_checks():
         )
 
     mode = "DRY RUN" if DRY_RUN else "LIVE REMEDIATION"
-    logger.info(f"Aegis v2.8.0 starting in {mode} mode.")
+    logger.info(f"Aegis v2.9.0 starting in {mode} mode.")
 
     acas_mode = os.getenv("ACAS_MODE", "xml")
     logger.info("ACAS scanner mode: %s (RA-5 / SI-2)", acas_mode)
@@ -221,7 +231,7 @@ async def startup_checks():
         AuditEventType.STARTUP,
         AuditOutcome.SUCCESS,
         detail={
-            "version": "2.8.0",
+            "version": "2.9.0",
             "dev_mode": DEV_MODE,
             "dry_run": DRY_RUN,
             "auto_remediate": AUTO_REMEDIATE,
@@ -424,7 +434,7 @@ def root():
     fips_info = _fips.compliance_summary()
     return {
         "service":        "Aegis",
-        "version":        "2.8.0",
+        "version":        "2.9.0",
         "status":         "running",
         "mode":           "dry_run" if DRY_RUN else "live",
         "auto_remediate": AUTO_REMEDIATE,
@@ -1022,3 +1032,102 @@ async def rotate_encryption_keys(
         "columns": columns,
         "message": "Rotation running in background. Check logs for completion.",
     }
+
+
+# ── eMASS SSP Auto-Generator (v2.9.0) ─────────────────────────────────────────
+# CA-2 (Control Assessments), CA-5 (POA&M), CA-6 (Authorization), PL-2 (SSP)
+
+@app.get("/api/ssp")
+async def get_ssp_json(
+    caller: dict = Depends(require_role(Role.ADMIN)),
+):
+    """
+    Generate and return the System Security Plan as an eMASS API import payload.
+
+    The SSP is built live from Aegis posture data:
+      - FIPS status (SC-13 / IA-7 controls)
+      - STIG checker results
+      - ACAS/Nessus scan summary + POA&M candidates
+      - mTLS configuration (SC-8, IA-3 controls)
+      - Encryption configuration (SC-28 controls)
+
+    Returns JSON suitable for POST to eMASS /api/v3/systems/{id}/controls.
+
+    NIST PL-2, CA-2, CA-6 — ADMIN+ only.
+    """
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        detail={"resource": "/api/ssp", "format": "json"},
+    )
+    try:
+        ssp = AegisSspGenerator().build()
+        return json.loads(ssp.to_emass_json())
+    except Exception as exc:
+        logger.error("SSP generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"SSP generation error: {exc}")
+
+
+@app.get("/api/ssp/csv")
+async def get_ssp_csv(
+    caller: dict = Depends(require_role(Role.ADMIN)),
+):
+    """
+    Generate and return the SSP Controls worksheet as a CSV file.
+
+    Compatible with eMASS Manual Upload (Controls worksheet tab).
+    Download and import via eMASS System → Artifacts → Bulk Import.
+
+    NIST PL-2, CA-2 — ADMIN+ only.
+    """
+    from fastapi.responses import StreamingResponse
+
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        detail={"resource": "/api/ssp/csv", "format": "csv"},
+    )
+    try:
+        ssp     = AegisSspGenerator().build()
+        csv_str = ssp.to_emass_csv()
+        filename = f"aegis_ssp_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+        return StreamingResponse(
+            iter([csv_str]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        logger.error("SSP CSV generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"SSP CSV error: {exc}")
+
+
+@app.get("/api/ssp/md")
+async def get_ssp_markdown(
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Generate and return the SSP as a Markdown narrative document.
+
+    Suitable for DAA review package, human-readable control narratives,
+    and inclusion in the Authorization package (DAAPM v2.2 format).
+
+    NIST PL-2 — ANALYST+ (read-only, no sensitive data).
+    """
+    from fastapi.responses import PlainTextResponse
+
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        detail={"resource": "/api/ssp/md", "format": "markdown"},
+    )
+    try:
+        ssp = AegisSspGenerator().build()
+        return PlainTextResponse(ssp.to_markdown(), media_type="text/markdown")
+    except Exception as exc:
+        logger.error("SSP Markdown generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"SSP Markdown error: {exc}")
+
+
+# Import json and datetime at the module level for SSP endpoints
+import json
+from datetime import datetime, timezone
