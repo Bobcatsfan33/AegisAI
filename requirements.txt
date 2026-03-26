@@ -50,6 +50,13 @@ opensearch-py==2.7.1             # Apache 2.0 — recommended over Elastic
 # ── Network scanning (requires nmap binary: apt install nmap) ─────────────────
 # python-nmap==0.7.1             # uncomment when NETWORK_SCAN_ENABLED=true
 
+# ── Live network flow monitoring ───────────────────────────────────────────
+psutil==6.1.1                    # cross-platform process & network connection info (BSD)
+
+# ── Host malware scanning ─────────────────────────────────────────────────
+yara-python==4.5.4               # YARA rule engine for malware pattern matching (Apache 2.0)
+watchdog==6.0.0                  # filesystem event watcher for real-time download scanning
+
 # ── Kubernetes scanning ───────────────────────────────────────────────────────
 # kubernetes==31.0.0             # uncomment when K8S_ENABLED=true
 
