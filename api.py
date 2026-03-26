@@ -104,6 +104,12 @@ from config import (
     K8S_ENABLED,
     NETWORK_SCAN_ENABLED,
     NETWORK_SCAN_TARGETS,
+    NETWORK_FLOW_MONITOR_ENABLED,
+    NETWORK_FLOW_MONITOR_INTERVAL,
+    HOST_SCAN_ENABLED,
+    HOST_SCAN_WATCH_DIRS,
+    HOST_SCAN_WATCH_REALTIME,
+    HOST_SCAN_EXTRA_RULES_DIRS,
     OIDC_ISSUER,
 )
 from modules.agents.orchestrator import AIOrchestrator
@@ -128,6 +134,8 @@ from modules.security.encryption import (
 )
 from modules.compliance.ssp_generator import AegisSspGenerator
 from modules.compliance.conmon import ConMonPipeline, check_conmon_config as _check_conmon_config
+from modules.scanners.network.flow_monitor import NetworkFlowMonitor, NETWORK_FLOWS_MAPPING
+from modules.scanners.host import DownloadScanner, DownloadWatcher, YaraEngine
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +144,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Aegis",
     description="Autonomous multi-cloud & network security posture management",
-    version="2.10.0",
+    version="2.11.0",
     # Suppress /openapi.json and /docs in non-dev environments (reduces attack surface)
     docs_url="/docs" if DEV_MODE else None,
     redoc_url="/redoc" if DEV_MODE else None,
@@ -1261,3 +1269,274 @@ async def get_conmon_status(
 # Import json and datetime at the module level for SSP endpoints
 import json
 from datetime import datetime, timezone
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# v2.11.0 — Local Network Monitor + Host Malware Scanner
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Module-level singletons ───────────────────────────────────────────────────
+
+_elastic_indexer_singleton = None
+
+def _get_elastic() -> "ElasticIndexer | None":
+    global _elastic_indexer_singleton
+    if _elastic_indexer_singleton is None and ELASTICSEARCH_ENABLED:
+        _elastic_indexer_singleton = ElasticIndexer()
+        # Ensure network-flow index exists
+        client = _elastic_indexer_singleton._get_client()
+        if client:
+            idx = f"{_elastic_indexer_singleton.prefix}-network-flows"
+            try:
+                if not client.indices.exists(index=idx):
+                    client.indices.create(index=idx, body=NETWORK_FLOWS_MAPPING)
+                    logger.info(f"Created Elasticsearch index: {idx}")
+            except Exception as exc:
+                logger.warning(f"Could not create network-flows index: {exc}")
+    return _elastic_indexer_singleton
+
+
+_net_monitor: "NetworkFlowMonitor | None" = None
+_download_watcher: "DownloadWatcher | None" = None
+_download_scanner: "DownloadScanner | None" = None
+
+
+@app.on_event("startup")
+async def _start_v211_monitors():
+    global _net_monitor, _download_watcher, _download_scanner
+
+    # Network flow monitor
+    if NETWORK_FLOW_MONITOR_ENABLED:
+        _net_monitor = NetworkFlowMonitor(
+            interval=NETWORK_FLOW_MONITOR_INTERVAL,
+            elastic_indexer=_get_elastic(),
+        )
+        ok = _net_monitor.start()
+        if ok:
+            logger.info("NetworkFlowMonitor started (interval=%.0fs)", NETWORK_FLOW_MONITOR_INTERVAL)
+        else:
+            logger.warning("NetworkFlowMonitor could not start — psutil may not be installed")
+
+    # Host download scanner + optional real-time watcher
+    if HOST_SCAN_ENABLED:
+        yara_engine = YaraEngine(rules_dirs=HOST_SCAN_EXTRA_RULES_DIRS or None)
+        _download_scanner = DownloadScanner(
+            scan_dirs=HOST_SCAN_WATCH_DIRS or None,
+            yara_engine=yara_engine,
+        )
+        _download_watcher = DownloadWatcher(
+            watch_dirs=HOST_SCAN_WATCH_DIRS or None,
+            scanner=_download_scanner,
+        )
+        if HOST_SCAN_WATCH_REALTIME:
+            _download_watcher.start()
+            logger.info("DownloadWatcher started (real-time mode)")
+        else:
+            logger.info("HostScanner ready (on-demand mode; set HOST_SCAN_WATCH_REALTIME=true for real-time)")
+
+
+@app.on_event("shutdown")
+async def _stop_v211_monitors():
+    if _net_monitor:
+        _net_monitor.stop()
+    if _download_watcher:
+        _download_watcher.stop()
+
+
+# ── Network monitor endpoints ─────────────────────────────────────────────────
+
+@app.get("/api/network/flows")
+async def get_network_flows(
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return the current in-memory snapshot of captured network flows.
+
+    Includes process name, PID, src/dst IP:port, connection state, and
+    IOC enrichment (threat score, MITRE technique, alert reason).
+
+    Requires NETWORK_FLOW_MONITOR_ENABLED=true in environment.
+    NIST SI-4, CA-7 — ANALYST+ read access.
+    """
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=caller.get("sub", "unknown"),
+        detail={"resource": "/api/network/flows"},
+    )
+    if not _net_monitor:
+        return {
+            "enabled": False,
+            "message": "Network flow monitor not active. Set NETWORK_FLOW_MONITOR_ENABLED=true.",
+        }
+    flows = _net_monitor.snapshot()
+    alerts = [f for f in flows if f.alert]
+    return {
+        "enabled": True,
+        "total_flows": len(flows),
+        "alert_count": len(alerts),
+        "flows": [f.to_dict() for f in flows[-100:]],   # last 100
+        "alerts": [f.to_dict() for f in alerts],
+    }
+
+
+@app.post("/api/network/scan")
+async def run_network_flow_scan(
+    background_tasks: BackgroundTasks,
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Trigger an immediate one-shot network connection snapshot scan.
+
+    Does not require the background monitor to be running. Captures the
+    current active connections, applies IOC enrichment, and returns any
+    suspicious flows as Findings.
+
+    NIST SI-4, CA-7, AU-2 — ANALYST+.
+    """
+    actor = caller.get("sub", "unknown")
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/network/scan"},
+    )
+    scanner = _net_monitor or NetworkFlowMonitor()
+    findings = scanner.scan()
+    elastic = _get_elastic()
+    if elastic and findings:
+        for finding in findings:
+            elastic._index(
+                f"{elastic.prefix}-findings",
+                {"@timestamp": finding.timestamp, **finding.to_dict()},
+            )
+    log_event(
+        AuditEventType.SCAN,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/network/scan", "findings": len(findings)},
+    )
+    return {
+        "findings_count": len(findings),
+        "findings": [f.to_dict() for f in findings],
+        "elastic_indexed": elastic is not None,
+    }
+
+
+# ── Host scanner endpoints ─────────────────────────────────────────────────────
+
+@app.post("/api/host/scan")
+async def run_host_scan(
+    background_tasks: BackgroundTasks,
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Trigger a full YARA + file-integrity scan of the configured download
+    directories (default: ~/Downloads, /tmp, /var/tmp).
+
+    Returns all YARA rule hits and any file integrity violations found.
+    Results are indexed into Elasticsearch when ELASTICSEARCH_ENABLED=true.
+
+    NIST SI-3, SI-7, AU-2, AU-12 — ANALYST+.
+    """
+    actor = caller.get("sub", "unknown")
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/host/scan"},
+    )
+    scanner = _download_scanner or DownloadScanner(
+        scan_dirs=HOST_SCAN_WATCH_DIRS or None,
+        extra_rules_dirs=HOST_SCAN_EXTRA_RULES_DIRS or None,
+    )
+    findings = scanner.scan()
+    elastic = _get_elastic()
+    if elastic and findings:
+        for finding in findings:
+            elastic._index(
+                f"{elastic.prefix}-findings",
+                {"@timestamp": finding.timestamp, **finding.to_dict()},
+            )
+    log_event(
+        AuditEventType.SCAN,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={
+            "resource":  "/api/host/scan",
+            "findings":  len(findings),
+            "scan_dirs": scanner.scan_dirs,
+        },
+    )
+    return {
+        "findings_count": len(findings),
+        "scan_dirs":      scanner.scan_dirs,
+        "yara_available": scanner._yara.is_available(),
+        "findings":       [f.to_dict() for f in findings],
+        "elastic_indexed": elastic is not None,
+    }
+
+
+@app.post("/api/host/scan/file")
+async def scan_single_file(
+    file_path: str,
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Scan a single file path with YARA and return any threat matches.
+
+    Useful for ad-hoc triage of a specific downloaded file before execution.
+
+    NIST SI-3, SI-7 — ANALYST+.
+    """
+    actor = caller.get("sub", "unknown")
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/host/scan/file", "file": file_path},
+    )
+    scanner = _download_scanner or DownloadScanner()
+    findings = scanner.scan_file(file_path)
+    return {
+        "file":            file_path,
+        "findings_count":  len(findings),
+        "clean":           len(findings) == 0,
+        "findings":        [f.to_dict() for f in findings],
+    }
+
+
+@app.get("/api/host/status")
+async def get_host_scanner_status(
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return current status of the host scanner and download watcher.
+
+    Reports: YARA engine availability, baseline file count, watch dirs,
+    real-time watcher state, and any pending findings accumulated since
+    the last poll.
+
+    NIST SI-3, SI-7, CA-7 — ANALYST+.
+    """
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=caller.get("sub", "unknown"),
+        detail={"resource": "/api/host/status"},
+    )
+    scanner = _download_scanner
+    watcher = _download_watcher
+
+    pending = []
+    if watcher:
+        pending = [f.to_dict() for f in watcher.findings_since_last_call()]
+
+    return {
+        "host_scan_enabled":   HOST_SCAN_ENABLED,
+        "realtime_watching":   watcher.is_running if watcher else False,
+        "yara_available":      YaraEngine().is_available(),
+        "baseline_summary":    scanner.baseline_summary() if scanner else {},
+        "pending_findings":    pending,
+        "pending_count":       len(pending),
+    }

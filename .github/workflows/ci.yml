@@ -43,6 +43,8 @@ jobs:
             'modules.compliance.ssp_generator',
             'modules.compliance.conmon',
             'modules.reports.compliance',
+            'modules.scanners.network.flow_monitor',
+            'modules.scanners.host',
             'modules.scanners.base',
             'modules.scanners.acas.scanner',
             'modules.security.audit_log',
