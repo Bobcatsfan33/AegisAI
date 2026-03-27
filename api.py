@@ -1,5 +1,5 @@
 """
-Aegis — FastAPI web service  (v2.6.0)
+Aegis — FastAPI web service  (v2.10.0)
 
 Endpoints:
   GET  /                   → health check (public)
@@ -15,6 +15,15 @@ Endpoints:
   GET  /api/acas/findings  → paginated ACAS findings (ANALYST+)
   POST /api/acas/scan      → trigger on-demand ACAS pull from Tenable.sc/Nessus (ADMIN+)
   GET  /api/audit          → tail the immutable audit log (OWNER only)
+
+v2.10.0 — ConMon Automation Pipeline:
+  - POST /api/conmon/run   — trigger on-demand ConMon run (ADMIN+, background thread)
+  - GET  /api/conmon/status — last run summary with stage, timestamps, findings delta (ANALYST+)
+  - 5-stage pipeline: SCAN → ASSESS → REPORT → PUSH → ALERT
+  - EMassClient: PUT controls, POST POA&M, POST artifact to eMASS REST API v3.
+  - SIEM (JSON POST) + Slack webhook alert on every run.
+  - CONMON_DRY_RUN=true (default) for safe testing without eMASS writes.
+  - NIST CA-2, CA-5, CA-6, CA-7, RA-5, SI-4 ConMon coverage.
 
 v2.9.0 — eMASS SSP Auto-Generator:
   - GET /api/ssp       — live SSP JSON (eMASS API import payload)
@@ -95,6 +104,12 @@ from config import (
     K8S_ENABLED,
     NETWORK_SCAN_ENABLED,
     NETWORK_SCAN_TARGETS,
+    NETWORK_FLOW_MONITOR_ENABLED,
+    NETWORK_FLOW_MONITOR_INTERVAL,
+    HOST_SCAN_ENABLED,
+    HOST_SCAN_WATCH_DIRS,
+    HOST_SCAN_WATCH_REALTIME,
+    HOST_SCAN_EXTRA_RULES_DIRS,
     OIDC_ISSUER,
 )
 from modules.agents.orchestrator import AIOrchestrator
@@ -118,6 +133,9 @@ from modules.security.encryption import (
     KeyRotator,
 )
 from modules.compliance.ssp_generator import AegisSspGenerator
+from modules.compliance.conmon import ConMonPipeline, check_conmon_config as _check_conmon_config
+from modules.scanners.network.flow_monitor import NetworkFlowMonitor, NETWORK_FLOWS_MAPPING
+from modules.scanners.host import DownloadScanner, DownloadWatcher, YaraEngine
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +144,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Aegis",
     description="Autonomous multi-cloud & network security posture management",
-    version="2.9.0",
+    version="2.11.0",
     # Suppress /openapi.json and /docs in non-dev environments (reduces attack surface)
     docs_url="/docs" if DEV_MODE else None,
     redoc_url="/redoc" if DEV_MODE else None,
@@ -167,6 +185,10 @@ scan_results: dict[str, Any] = {}
 
 _indexer = ElasticIndexer()
 
+# ── ConMon pipeline state ──────────────────────────────────────────────────────
+# last_conmon_run holds the ConMonRunResult from the most recent pipeline run.
+_last_conmon_run: dict | None = None
+
 
 # ── Startup ───────────────────────────────────────────────────────────────────
 
@@ -190,7 +212,7 @@ async def startup_checks():
         )
 
     mode = "DRY RUN" if DRY_RUN else "LIVE REMEDIATION"
-    logger.info(f"Aegis v2.9.0 starting in {mode} mode.")
+    logger.info(f"Aegis v2.10.0 starting in {mode} mode.")
 
     acas_mode = os.getenv("ACAS_MODE", "xml")
     logger.info("ACAS scanner mode: %s (RA-5 / SI-2)", acas_mode)
@@ -226,12 +248,30 @@ async def startup_checks():
     except Exception as exc:
         logger.error("Aegis encryption at rest config error: %s", exc)
 
+    # v2.10: ConMon pipeline configuration check (CA-7)
+    conmon_summary: dict = {}
+    try:
+        conmon_summary = _check_conmon_config()
+        if conmon_summary.get("emass_configured"):
+            logger.info(
+                "ConMon pipeline CONFIGURED — eMASS system %s (dry_run=%s)",
+                conmon_summary.get("emass_system_id", "?"),
+                conmon_summary.get("dry_run", True),
+            )
+        else:
+            logger.warning(
+                "ConMon pipeline: eMASS NOT configured "
+                "(set EMASS_URL + EMASS_API_KEY + EMASS_SYSTEM_ID for CA-7 automation)."
+            )
+    except Exception as exc:
+        logger.error("Aegis ConMon config error: %s", exc)
+
     # AU-2 / AU-12: emit auditable startup event
     log_event(
         AuditEventType.STARTUP,
         AuditOutcome.SUCCESS,
         detail={
-            "version": "2.9.0",
+            "version": "2.10.0",
             "dev_mode": DEV_MODE,
             "dry_run": DRY_RUN,
             "auto_remediate": AUTO_REMEDIATE,
@@ -243,6 +283,8 @@ async def startup_checks():
             "mtls_outbound_certs": mtls_summary.get("outbound_certs_present", False),
             "enc_provider": enc_summary.get("provider", "unknown"),
             "enc_provider_ready": enc_summary.get("provider_ready", False),
+            "conmon_configured": conmon_summary.get("emass_configured", False),
+            "conmon_dry_run": conmon_summary.get("dry_run", True),
         },
     )
 
@@ -433,16 +475,17 @@ def root():
     """Public health check — no auth required."""
     fips_info = _fips.compliance_summary()
     return {
-        "service":        "Aegis",
-        "version":        "2.9.0",
-        "status":         "running",
-        "mode":           "dry_run" if DRY_RUN else "live",
-        "auto_remediate": AUTO_REMEDIATE,
-        "fips_active":    fips_info.get("fips_active", False),
-        "il_environment": fips_info.get("environment", "unknown"),
-        "mtls_enabled":   os.getenv("MTLS_MODE", "").lower() in ("proxy", "native"),
-        "mtls_mode":      os.getenv("MTLS_MODE", "disabled"),
-        "enc_provider":   os.getenv("ENC_PROVIDER", "env"),
+        "service":          "Aegis",
+        "version":          "2.10.0",
+        "status":           "running",
+        "mode":             "dry_run" if DRY_RUN else "live",
+        "auto_remediate":   AUTO_REMEDIATE,
+        "fips_active":      fips_info.get("fips_active", False),
+        "il_environment":   fips_info.get("environment", "unknown"),
+        "mtls_enabled":     os.getenv("MTLS_MODE", "").lower() in ("proxy", "native"),
+        "mtls_mode":        os.getenv("MTLS_MODE", "disabled"),
+        "enc_provider":     os.getenv("ENC_PROVIDER", "env"),
+        "conmon_configured": bool(os.getenv("EMASS_URL")),
     }
 
 
@@ -1128,6 +1171,372 @@ async def get_ssp_markdown(
         raise HTTPException(status_code=500, detail=f"SSP Markdown error: {exc}")
 
 
+# ── ConMon endpoints  (v2.10.0) ────────────────────────────────────────────────
+
+def _run_conmon_pipeline(actor: str) -> None:
+    """Background task: run ConMon pipeline and persist last result."""
+    global _last_conmon_run
+    try:
+        result = ConMonPipeline().run()
+        _last_conmon_run = result.to_summary()
+        _last_conmon_run["completed_by"] = actor
+        log_event(
+            AuditEventType.ACCESS,
+            AuditOutcome.SUCCESS,
+            actor=actor,
+            detail={"resource": "/api/conmon/run", "result": _last_conmon_run},
+        )
+        logger.info(
+            "ConMon pipeline completed: stage=%s emass_controls=%d poams=%d errors=%d",
+            result.stage,
+            result.emass_sync.controls_updated if result.emass_sync else 0,
+            result.emass_sync.poams_added if result.emass_sync else 0,
+            result.error_count,
+        )
+    except Exception as exc:
+        _last_conmon_run = {"status": "error", "error": str(exc), "completed_by": actor}
+        log_event(
+            AuditEventType.ACCESS,
+            AuditOutcome.FAILURE,
+            actor=actor,
+            detail={"resource": "/api/conmon/run", "error": str(exc)},
+        )
+        logger.error("ConMon pipeline error: %s", exc)
+
+
+@app.post("/api/conmon/run", status_code=202)
+async def run_conmon(
+    background_tasks: BackgroundTasks,
+    caller: dict = Depends(require_role(Role.ADMIN)),
+):
+    """
+    Trigger an on-demand Continuous Monitoring (ConMon) pipeline run.
+
+    Stages: SCAN → ASSESS → REPORT → PUSH → ALERT.
+    Results are pushed to eMASS (PUT controls, POST POA&M, POST artifact).
+    SIEM and Slack alerts fire on completion.
+
+    Set CONMON_DRY_RUN=true (default) for a full run without eMASS writes.
+
+    NIST CA-7, RA-5, SI-4 — ADMIN+ only.
+    """
+    actor = caller.get("sub", "unknown")
+    run_id = str(uuid.uuid4())
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/conmon/run", "run_id": run_id, "action": "queued"},
+    )
+    background_tasks.add_task(_run_conmon_pipeline, actor)
+    return {
+        "message": "ConMon pipeline queued",
+        "run_id": run_id,
+        "dry_run": bool(os.getenv("CONMON_DRY_RUN", "true").lower() in ("1", "true", "yes")),
+    }
+
+
+@app.get("/api/conmon/status")
+async def get_conmon_status(
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return the summary of the last ConMon pipeline run.
+
+    Includes: stage reached, scan counts, STIG CAT-I/II/III findings,
+    eMASS sync result (controls updated, POA&M entries added), error count,
+    and SIEM/Slack alert status.
+
+    NIST CA-7 — ANALYST+ (read-only, no sensitive control data exposed).
+    """
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=caller.get("sub", "unknown"),
+        detail={"resource": "/api/conmon/status"},
+    )
+    if _last_conmon_run is None:
+        return {
+            "status": "no_run",
+            "message": "No ConMon run has been executed in this session. "
+                       "POST /api/conmon/run to trigger a run.",
+            "conmon_configured": bool(os.getenv("EMASS_URL")),
+            "dry_run_mode": bool(os.getenv("CONMON_DRY_RUN", "true").lower() in ("1", "true", "yes")),
+        }
+    return _last_conmon_run
+
+
 # Import json and datetime at the module level for SSP endpoints
 import json
 from datetime import datetime, timezone
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# v2.11.0 — Local Network Monitor + Host Malware Scanner
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Module-level singletons ───────────────────────────────────────────────────
+
+_elastic_indexer_singleton = None
+
+def _get_elastic() -> "ElasticIndexer | None":
+    global _elastic_indexer_singleton
+    if _elastic_indexer_singleton is None and ELASTICSEARCH_ENABLED:
+        _elastic_indexer_singleton = ElasticIndexer()
+        # Ensure network-flow index exists
+        client = _elastic_indexer_singleton._get_client()
+        if client:
+            idx = f"{_elastic_indexer_singleton.prefix}-network-flows"
+            try:
+                if not client.indices.exists(index=idx):
+                    client.indices.create(index=idx, body=NETWORK_FLOWS_MAPPING)
+                    logger.info(f"Created Elasticsearch index: {idx}")
+            except Exception as exc:
+                logger.warning(f"Could not create network-flows index: {exc}")
+    return _elastic_indexer_singleton
+
+
+_net_monitor: "NetworkFlowMonitor | None" = None
+_download_watcher: "DownloadWatcher | None" = None
+_download_scanner: "DownloadScanner | None" = None
+
+
+@app.on_event("startup")
+async def _start_v211_monitors():
+    global _net_monitor, _download_watcher, _download_scanner
+
+    # Network flow monitor
+    if NETWORK_FLOW_MONITOR_ENABLED:
+        _net_monitor = NetworkFlowMonitor(
+            interval=NETWORK_FLOW_MONITOR_INTERVAL,
+            elastic_indexer=_get_elastic(),
+        )
+        ok = _net_monitor.start()
+        if ok:
+            logger.info("NetworkFlowMonitor started (interval=%.0fs)", NETWORK_FLOW_MONITOR_INTERVAL)
+        else:
+            logger.warning("NetworkFlowMonitor could not start — psutil may not be installed")
+
+    # Host download scanner + optional real-time watcher
+    if HOST_SCAN_ENABLED:
+        yara_engine = YaraEngine(rules_dirs=HOST_SCAN_EXTRA_RULES_DIRS or None)
+        _download_scanner = DownloadScanner(
+            scan_dirs=HOST_SCAN_WATCH_DIRS or None,
+            yara_engine=yara_engine,
+        )
+        _download_watcher = DownloadWatcher(
+            watch_dirs=HOST_SCAN_WATCH_DIRS or None,
+            scanner=_download_scanner,
+        )
+        if HOST_SCAN_WATCH_REALTIME:
+            _download_watcher.start()
+            logger.info("DownloadWatcher started (real-time mode)")
+        else:
+            logger.info("HostScanner ready (on-demand mode; set HOST_SCAN_WATCH_REALTIME=true for real-time)")
+
+
+@app.on_event("shutdown")
+async def _stop_v211_monitors():
+    if _net_monitor:
+        _net_monitor.stop()
+    if _download_watcher:
+        _download_watcher.stop()
+
+
+# ── Network monitor endpoints ─────────────────────────────────────────────────
+
+@app.get("/api/network/flows")
+async def get_network_flows(
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return the current in-memory snapshot of captured network flows.
+
+    Includes process name, PID, src/dst IP:port, connection state, and
+    IOC enrichment (threat score, MITRE technique, alert reason).
+
+    Requires NETWORK_FLOW_MONITOR_ENABLED=true in environment.
+    NIST SI-4, CA-7 — ANALYST+ read access.
+    """
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=caller.get("sub", "unknown"),
+        detail={"resource": "/api/network/flows"},
+    )
+    if not _net_monitor:
+        return {
+            "enabled": False,
+            "message": "Network flow monitor not active. Set NETWORK_FLOW_MONITOR_ENABLED=true.",
+        }
+    flows = _net_monitor.snapshot()
+    alerts = [f for f in flows if f.alert]
+    return {
+        "enabled": True,
+        "total_flows": len(flows),
+        "alert_count": len(alerts),
+        "flows": [f.to_dict() for f in flows[-100:]],   # last 100
+        "alerts": [f.to_dict() for f in alerts],
+    }
+
+
+@app.post("/api/network/scan")
+async def run_network_flow_scan(
+    background_tasks: BackgroundTasks,
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Trigger an immediate one-shot network connection snapshot scan.
+
+    Does not require the background monitor to be running. Captures the
+    current active connections, applies IOC enrichment, and returns any
+    suspicious flows as Findings.
+
+    NIST SI-4, CA-7, AU-2 — ANALYST+.
+    """
+    actor = caller.get("sub", "unknown")
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/network/scan"},
+    )
+    scanner = _net_monitor or NetworkFlowMonitor()
+    findings = scanner.scan()
+    elastic = _get_elastic()
+    if elastic and findings:
+        for finding in findings:
+            elastic._index(
+                f"{elastic.prefix}-findings",
+                {"@timestamp": finding.timestamp, **finding.to_dict()},
+            )
+    log_event(
+        AuditEventType.SCAN,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/network/scan", "findings": len(findings)},
+    )
+    return {
+        "findings_count": len(findings),
+        "findings": [f.to_dict() for f in findings],
+        "elastic_indexed": elastic is not None,
+    }
+
+
+# ── Host scanner endpoints ─────────────────────────────────────────────────────
+
+@app.post("/api/host/scan")
+async def run_host_scan(
+    background_tasks: BackgroundTasks,
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Trigger a full YARA + file-integrity scan of the configured download
+    directories (default: ~/Downloads, /tmp, /var/tmp).
+
+    Returns all YARA rule hits and any file integrity violations found.
+    Results are indexed into Elasticsearch when ELASTICSEARCH_ENABLED=true.
+
+    NIST SI-3, SI-7, AU-2, AU-12 — ANALYST+.
+    """
+    actor = caller.get("sub", "unknown")
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/host/scan"},
+    )
+    scanner = _download_scanner or DownloadScanner(
+        scan_dirs=HOST_SCAN_WATCH_DIRS or None,
+        extra_rules_dirs=HOST_SCAN_EXTRA_RULES_DIRS or None,
+    )
+    findings = scanner.scan()
+    elastic = _get_elastic()
+    if elastic and findings:
+        for finding in findings:
+            elastic._index(
+                f"{elastic.prefix}-findings",
+                {"@timestamp": finding.timestamp, **finding.to_dict()},
+            )
+    log_event(
+        AuditEventType.SCAN,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={
+            "resource":  "/api/host/scan",
+            "findings":  len(findings),
+            "scan_dirs": scanner.scan_dirs,
+        },
+    )
+    return {
+        "findings_count": len(findings),
+        "scan_dirs":      scanner.scan_dirs,
+        "yara_available": scanner._yara.is_available(),
+        "findings":       [f.to_dict() for f in findings],
+        "elastic_indexed": elastic is not None,
+    }
+
+
+@app.post("/api/host/scan/file")
+async def scan_single_file(
+    file_path: str,
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Scan a single file path with YARA and return any threat matches.
+
+    Useful for ad-hoc triage of a specific downloaded file before execution.
+
+    NIST SI-3, SI-7 — ANALYST+.
+    """
+    actor = caller.get("sub", "unknown")
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=actor,
+        detail={"resource": "/api/host/scan/file", "file": file_path},
+    )
+    scanner = _download_scanner or DownloadScanner()
+    findings = scanner.scan_file(file_path)
+    return {
+        "file":            file_path,
+        "findings_count":  len(findings),
+        "clean":           len(findings) == 0,
+        "findings":        [f.to_dict() for f in findings],
+    }
+
+
+@app.get("/api/host/status")
+async def get_host_scanner_status(
+    caller: dict = Depends(require_role(Role.ANALYST)),
+):
+    """
+    Return current status of the host scanner and download watcher.
+
+    Reports: YARA engine availability, baseline file count, watch dirs,
+    real-time watcher state, and any pending findings accumulated since
+    the last poll.
+
+    NIST SI-3, SI-7, CA-7 — ANALYST+.
+    """
+    log_event(
+        AuditEventType.ACCESS,
+        AuditOutcome.SUCCESS,
+        actor=caller.get("sub", "unknown"),
+        detail={"resource": "/api/host/status"},
+    )
+    scanner = _download_scanner
+    watcher = _download_watcher
+
+    pending = []
+    if watcher:
+        pending = [f.to_dict() for f in watcher.findings_since_last_call()]
+
+    return {
+        "host_scan_enabled":   HOST_SCAN_ENABLED,
+        "realtime_watching":   watcher.is_running if watcher else False,
+        "yara_available":      YaraEngine().is_available(),
+        "baseline_summary":    scanner.baseline_summary() if scanner else {},
+        "pending_findings":    pending,
+        "pending_count":       len(pending),
+    }

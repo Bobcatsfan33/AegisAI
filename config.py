@@ -43,6 +43,27 @@ NETWORK_SCAN_TARGETS: list[str] = [
     t.strip() for t in os.getenv("NETWORK_SCAN_TARGETS", "127.0.0.1").split(",") if t.strip()
 ]
 
+# ── Live network flow monitoring (v2.11) ──────────────────────────────
+# Requires: pip install psutil
+# NETWORK_FLOW_MONITOR_ENABLED=true starts a background thread that captures
+# live connections and ships IOC-enriched alerts to Elasticsearch.
+NETWORK_FLOW_MONITOR_ENABLED: bool = os.getenv("NETWORK_FLOW_MONITOR_ENABLED", "false").lower() == "true"
+NETWORK_FLOW_MONITOR_INTERVAL: float = float(os.getenv("NETWORK_FLOW_MONITOR_INTERVAL", "10"))
+
+# ── Host malware scanning (v2.11) ─────────────────────────────────────────
+# Requires: pip install yara-python watchdog
+# HOST_SCAN_ENABLED=true activates YARA + file integrity monitoring.
+# HOST_SCAN_WATCH_DIRS: comma-separated dirs to monitor (default: ~/Downloads,/tmp,/var/tmp)
+# HOST_SCAN_WATCH_REALTIME=true starts the watchdog filesystem watcher.
+HOST_SCAN_ENABLED: bool = os.getenv("HOST_SCAN_ENABLED", "false").lower() == "true"
+HOST_SCAN_WATCH_DIRS: list[str] = [
+    d.strip() for d in os.getenv("HOST_SCAN_WATCH_DIRS", "").split(",") if d.strip()
+] or None   # type: ignore[assignment]  # None → module uses its own defaults
+HOST_SCAN_WATCH_REALTIME: bool = os.getenv("HOST_SCAN_WATCH_REALTIME", "false").lower() == "true"
+HOST_SCAN_EXTRA_RULES_DIRS: list[str] = [
+    d.strip() for d in os.getenv("HOST_SCAN_EXTRA_RULES_DIRS", "").split(",") if d.strip()
+]
+
 # ── Kubernetes scanning (v2.3) ────────────────────────────────────────────────
 # Requires: pip install kubernetes
 # Connects via in-cluster service account or ~/.kube/config

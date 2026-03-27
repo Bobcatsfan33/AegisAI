@@ -12,5 +12,9 @@ line-length = 200
 ignore = ["F401", "F841", "E402", "E701", "F541", "F811"]
 
 # Keep these active — real correctness / security issues:
-# F821 undefined-name (stays active)
+# F821 undefined-name
+# F811 already excluded above
+# E711 / E712 comparison to None/True/False
+# W291 trailing whitespace
 select = ["F", "E", "W"]
+# Re-ignore E701/E402 via the ignore list above; F821 stays active
