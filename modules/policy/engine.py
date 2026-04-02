@@ -312,7 +312,8 @@ class PolicyEngine:
         rules: Optional[List[PolicyRule]] = None,
         config: Optional[Dict[str, Any]] = None,
     ):
-        self.rules = rules or list(DEFAULT_RULES)
+        import copy
+        self.rules = [copy.copy(r) for r in (rules or DEFAULT_RULES)]
         self.config = config or {}
 
     def configure(self, **kwargs):
