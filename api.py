@@ -126,6 +126,9 @@ from modules.ai_security_routes import (
     shutdown_ai_security,
 )
 
+# v3.1.0: Dashboard & reporting routes
+from modules.analytics.routes import dashboard_router
+
 logger = logging.getLogger(__name__)
 
 # ── App ────────────────────────────────────────────────────────────────────────
@@ -141,6 +144,9 @@ app = FastAPI(
 
 # v3.0.0: Mount AI Security API routes
 app.include_router(ai_security_router)
+
+# v3.1.0: Mount dashboard & reporting routes
+app.include_router(dashboard_router)
 
 # ── STIG checker singleton ─────────────────────────────────────────────────────
 _stig_checker = STIGChecker()
@@ -461,6 +467,14 @@ def root():
         "mtls_mode":      os.getenv("MTLS_MODE", "disabled"),
         "enc_provider":   os.getenv("ENC_PROVIDER", "env"),
     }
+
+
+@app.get("/dashboard", include_in_schema=False)
+async def dashboard_html():
+    """Serve the Aegis dashboard SPA (no auth — dashboard fetches authenticated API calls)."""
+    from fastapi.responses import FileResponse as _FileResponse
+    html_path = os.path.join(os.path.dirname(__file__), "modules", "analytics", "dashboard.html")
+    return _FileResponse(html_path, media_type="text/html")
 
 
 @app.post("/scan", status_code=202)
