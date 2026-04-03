@@ -16,7 +16,7 @@ cryptography==46.0.5
 # ── HTTP client ───────────────────────────────────────────────────────────────
 requests==2.32.3
 httpx==0.27.2                    # async-capable HTTP client
-certifi==2024.12.14              # CA bundle pinned for supply-chain trust
+certifi==2026.2.25              # CA bundle pinned for supply-chain trust
 
 # ── Data validation / config ──────────────────────────────────────────────────
 pydantic==2.10.3
