@@ -175,7 +175,7 @@ class TestOpenAIConnector:
         with patch.dict("sys.modules", {"openai": mock_openai}):
             # Re-import to pick up mock
             from importlib import import_module, reload
-            import modules.connectors.openai_connector as oc_mod
+            import modules.aegis_ai.connectors.openai_connector as oc_mod
             # Patch at module level
             connector = OpenAIConnector.__new__(OpenAIConnector)
             connector.provider = ProviderType.OPENAI
@@ -260,7 +260,7 @@ class TestOpenAIConnector:
     def test_import_error_raises(self):
         with patch.dict("sys.modules", {"openai": None}):
             # Reload module with openai=None
-            import modules.connectors.openai_connector as oc
+            import modules.aegis_ai.connectors.openai_connector as oc
             original = oc.openai
             oc.openai = None
             with pytest.raises(ImportError):
@@ -338,7 +338,7 @@ class TestAnthropicConnector:
         assert connector.is_available() is False
 
     def test_import_error_raises(self):
-        import modules.connectors.anthropic_connector as ac
+        import modules.aegis_ai.connectors.anthropic_connector as ac
         original = ac.anthropic
         ac.anthropic = None
         with pytest.raises(ImportError):
@@ -419,7 +419,7 @@ class TestConnectorRegistry:
         monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
         fake_conn = self._make_fake_openai_connector(ProviderType.OPENAI)
-        with patch("modules.connectors.registry.OpenAIConnector", return_value=fake_conn):
+        with patch("modules.aegis_ai.connectors.registry.OpenAIConnector", return_value=fake_conn):
             registry = ConnectorRegistry()
             registry.register_from_env()
 
@@ -432,7 +432,7 @@ class TestConnectorRegistry:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-testkey12345678901234567890")
 
         fake_conn = self._make_fake_openai_connector(ProviderType.ANTHROPIC, "claude-sonnet-4-6")
-        with patch("modules.connectors.registry.AnthropicConnector", return_value=fake_conn):
+        with patch("modules.aegis_ai.connectors.registry.AnthropicConnector", return_value=fake_conn):
             registry = ConnectorRegistry()
             registry.register_from_env()
 
@@ -454,7 +454,7 @@ class TestConnectorRegistry:
         monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
 
         fake_conn = self._make_fake_openai_connector(ProviderType.OLLAMA)
-        with patch("modules.connectors.registry.OpenAIConnector", return_value=fake_conn):
+        with patch("modules.aegis_ai.connectors.registry.OpenAIConnector", return_value=fake_conn):
             registry = ConnectorRegistry()
             registry.register_from_env()
 

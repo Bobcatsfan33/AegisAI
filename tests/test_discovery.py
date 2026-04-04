@@ -208,7 +208,7 @@ class TestNetworkScanning:
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0  # Port open
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             assets = engine.scan()
 
         # Should find assets for all AI_SERVICE_PORTS (all return open)
@@ -222,7 +222,7 @@ class TestNetworkScanning:
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 1  # Port closed
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             assets = engine.scan()
 
         network_assets = [a for a in assets if a.location == "network"]
@@ -234,7 +234,7 @@ class TestNetworkScanning:
         mock_sock = MagicMock()
         mock_sock.connect_ex.side_effect = socket.error("Connection refused")
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             # Should not raise
             assets = engine.scan()
 
@@ -249,7 +249,7 @@ class TestNetworkScanning:
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             assets = engine.scan()
 
         public_assets = [a for a in assets if a.exposure == "public"]
@@ -267,7 +267,7 @@ class TestNetworkScanning:
             return 0 if addr[1] == 11434 else 1
         mock_sock.connect_ex.side_effect = connect_side_effect
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             assets = engine.scan()
 
         ollama_assets = [a for a in assets if a.provider == "ollama" and a.location == "network"]
@@ -386,7 +386,7 @@ class TestFullScan:
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 1  # All ports closed
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             assets = engine.scan()
 
         # Should have the API key + the OLLAMA_HOST endpoint var
@@ -403,7 +403,7 @@ class TestFullScan:
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 1
 
-        with patch("modules.discovery.engine.socket.socket", return_value=mock_sock):
+        with patch("modules.aegis_ai.discovery.engine.socket.socket", return_value=mock_sock):
             engine.scan()
 
         # Each port should only be probed once for 127.0.0.1
