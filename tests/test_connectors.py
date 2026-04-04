@@ -13,16 +13,16 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.connectors.base import (
+from modules.aegis_ai.connectors.base import (
     LLMConnector,
     LLMResponse,
     ProviderType,
     estimate_cost,
     COST_TABLE,
 )
-from modules.connectors.registry import ConnectorRegistry
-from modules.connectors.openai_connector import OpenAIConnector
-from modules.connectors.anthropic_connector import AnthropicConnector
+from modules.aegis_ai.connectors.registry import ConnectorRegistry
+from modules.aegis_ai.connectors.openai_connector import OpenAIConnector
+from modules.aegis_ai.connectors.anthropic_connector import AnthropicConnector
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

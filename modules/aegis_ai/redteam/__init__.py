@@ -9,6 +9,6 @@ ATLAS, and NIST AI RMF categories.
 NIST 800-53: CA-8 (Penetration Testing), RA-5 (Vulnerability Monitoring).
 """
 
-from modules.redteam.engine import RedTeamEngine, AttackResult, AttackCategory
+from modules.aegis_ai.redteam.engine import RedTeamEngine, AttackResult, AttackCategory
 
 __all__ = ["RedTeamEngine", "AttackResult", "AttackCategory"]

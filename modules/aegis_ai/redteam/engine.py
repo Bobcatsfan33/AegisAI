@@ -959,7 +959,7 @@ class RedTeamEngine:
     Automated Red Team Engine.
 
     Usage:
-        from modules.connectors.registry import ConnectorRegistry
+        from modules.aegis_ai.connectors.registry import ConnectorRegistry
 
         registry = ConnectorRegistry()
         registry.register_from_env()

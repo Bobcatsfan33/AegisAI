@@ -1,6 +1,6 @@
 """
-Aegis Security Platform — Role-Based Access Control
-=====================================================
+AegisAI Platform — Role-Based Access Control
+==============================================
 FedRAMP High / IL6 compliance: NIST 800-53 Rev5 AC-2, AC-3, AC-5, AC-6
 
 Four roles enforcing least-privilege (AC-6):

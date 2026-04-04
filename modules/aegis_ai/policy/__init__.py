@@ -10,6 +10,6 @@ NIST 800-53: PL-1 (Policy & Procedures), CA-2 (Control Assessments),
 RA-3 (Risk Assessment), PM-9 (Risk Management Strategy).
 """
 
-from modules.policy.engine import PolicyEngine, RiskAssessment, PolicyRule, Severity
+from modules.aegis_ai.policy.engine import PolicyEngine, RiskAssessment, PolicyRule, Severity
 
 __all__ = ["PolicyEngine", "RiskAssessment", "PolicyRule", "Severity"]

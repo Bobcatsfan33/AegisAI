@@ -1,5 +1,5 @@
 """
-Aegis — NIST 800-53 Rev5 Compliance Report Generator  (v2.3+)
+AegisAI — NIST 800-53 Rev5 Compliance Report Generator  (v2.3+)
 
 Aggregates findings from all completed scans and produces:
   • Per-control gap analysis (which NIST controls have open findings)
@@ -123,17 +123,17 @@ class ComplianceReport:
         lines: List[str] = []
         for raw_line in md.splitlines():
             lines.extend(_wrap_text(raw_line, max_chars=90))
-        return _build_pdf_bytes(lines, title="Aegis — NIST 800-53 Rev5 Compliance Report")
+        return _build_pdf_bytes(lines, title="AegisAI — NIST 800-53 Rev5 Compliance Report")
 
     def to_docx_bytes(self) -> bytes:
         """Generate a DOCX report using stdlib only (no python-docx)."""
         md = self.to_markdown()
         paragraphs = md.splitlines()
-        return _build_docx_bytes(paragraphs, title="Aegis — NIST 800-53 Rev5 Compliance Report")
+        return _build_docx_bytes(paragraphs, title="AegisAI — NIST 800-53 Rev5 Compliance Report")
 
     def to_markdown(self) -> str:
         lines: List[str] = []
-        lines.append("# Aegis — NIST 800-53 Rev5 Compliance Report")
+        lines.append("# AegisAI — NIST 800-53 Rev5 Compliance Report")
         lines.append("")
         lines.append(f"**Generated:** {self.generated_at}")
         lines.append(f"**Overall Score:** {self.overall_score:.1f} / 100")

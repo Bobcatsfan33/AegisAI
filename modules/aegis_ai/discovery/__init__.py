@@ -9,6 +9,6 @@ NIST 800-53 controls: CM-8 (Information System Component Inventory),
 PM-5 (System Inventory), RA-5 (Vulnerability Monitoring & Scanning).
 """
 
-from modules.discovery.engine import DiscoveryEngine, AIAsset, AssetType
+from modules.aegis_ai.discovery.engine import DiscoveryEngine, AIAsset, AssetType
 
 __all__ = ["DiscoveryEngine", "AIAsset", "AssetType"]

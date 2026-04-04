@@ -4,7 +4,7 @@ AegisAI API Routes — v3.0.0
 AI Security endpoints for the AegisAI layer.  Designed to be mounted onto the
 existing Aegis FastAPI app via:
 
-    from modules.ai_security_routes import ai_security_router
+    from modules.aegis_ai.routes import ai_security_router
     app.include_router(ai_security_router)
 
 Endpoints:
@@ -33,12 +33,12 @@ from modules.security.rbac import Role, require_role
 from modules.security.audit_log import AuditEventType, AuditOutcome, log_event
 from modules.tenants.middleware import get_tenant_context, TenantContext
 
-from modules.discovery import DiscoveryEngine, AIAsset
-from modules.redteam import RedTeamEngine, AttackResult, AttackCategory
-from modules.guardrails import GuardrailsEngine, GuardrailVerdict
-from modules.policy import PolicyEngine, RiskAssessment
-from modules.telemetry import TelemetryEngine, AIEvent, EventType
-from modules.connectors import ConnectorRegistry
+from modules.aegis_ai.discovery import DiscoveryEngine, AIAsset
+from modules.aegis_ai.redteam import RedTeamEngine, AttackResult, AttackCategory
+from modules.aegis_ai.guardrails import GuardrailsEngine, GuardrailVerdict
+from modules.aegis_ai.policy import PolicyEngine, RiskAssessment
+from modules.aegis_ai.telemetry import TelemetryEngine, AIEvent, EventType
+from modules.aegis_ai.connectors import ConnectorRegistry
 
 logger = logging.getLogger("aegis.ai_security")
 
@@ -319,7 +319,7 @@ async def telemetry_query(
     query_name: str = Query(..., description="Pre-built query name"),
 ):
     """Run a pre-built analytics query against ClickHouse."""
-    from modules.telemetry.engine import ANALYTICS_QUERIES
+    from modules.aegis_ai.telemetry.engine import ANALYTICS_QUERIES
     if query_name not in ANALYTICS_QUERIES:
         raise HTTPException(400, f"Unknown query. Available: {list(ANALYTICS_QUERIES.keys())}")
     results = _telemetry_engine.query(query_name)

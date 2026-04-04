@@ -1,6 +1,6 @@
 version: "3.9"
 
-# ── Aegis — full stack ──────────────────────────────────────────────────
+# ── AegisAI — full stack ────────────────────────────────────────────────
 #
 #  Services:
 #    aegis        FastAPI app  →  http://localhost:8000
@@ -76,7 +76,7 @@ services:
       start_period: 15s
 
 
-  # ── ClickHouse (AI Telemetry — v3.0) ───────────────────────────────────────
+  # ── ClickHouse (AegisAI Telemetry — v3.0) ──────────────────────────────────
   clickhouse:
     image: clickhouse/clickhouse-server:24.3
     container_name: clickhouse

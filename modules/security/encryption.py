@@ -1,5 +1,5 @@
 """
-Aegis — Encryption at Rest  (v2.8.0)
+AegisAI — Encryption at Rest  (v2.8.0)
 ========================================
 Field-level, envelope encryption for all sensitive data stored in ClickHouse,
 SQLite (tenant store), and Redis (baseline profiles, rate counters).

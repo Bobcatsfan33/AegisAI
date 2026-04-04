@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.policy.engine import (
+from modules.aegis_ai.policy.engine import (
     PolicyEngine,
     PolicyRule,
     RuleViolation,

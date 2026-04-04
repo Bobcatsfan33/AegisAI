@@ -1,5 +1,5 @@
 """
-Aegis — Central configuration loaded from environment variables.
+AegisAI — Central configuration loaded from environment variables.
 Copy .env.example to .env and fill in values before running.
 """
 

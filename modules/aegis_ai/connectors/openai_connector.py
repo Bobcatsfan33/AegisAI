@@ -8,7 +8,7 @@ and any provider exposing the OpenAI chat completions API.
 import logging
 from typing import Dict, List, Optional
 
-from modules.connectors.base import LLMConnector, LLMResponse, ProviderType, estimate_cost
+from modules.aegis_ai.connectors.base import LLMConnector, LLMResponse, ProviderType, estimate_cost
 
 logger = logging.getLogger("aegis.connectors.openai")
 

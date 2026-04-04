@@ -1,5 +1,5 @@
 """
-Aegis — CLI entry point.
+AegisAI — CLI entry point.
 
 Usage:
     python main.py [--live] [--no-network]

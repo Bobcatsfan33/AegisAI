@@ -1,6 +1,6 @@
-# Contributing to Aegis Security
+# Contributing to AegisAI
 
-Thank you for your interest in contributing to Aegis Security. This project exists to replace legacy security tooling with open, cloud-native, AI-driven alternatives — and community contributions are how we get there.
+Thank you for your interest in contributing to AegisAI. This project exists to replace legacy security tooling with open, cloud-native, AI-driven alternatives — and community contributions are how we get there.
 
 ## Ground Rules
 

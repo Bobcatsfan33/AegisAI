@@ -12,9 +12,9 @@ import os
 import logging
 from typing import Dict, Optional
 
-from modules.connectors.base import LLMConnector, ProviderType
-from modules.connectors.openai_connector import OpenAIConnector
-from modules.connectors.anthropic_connector import AnthropicConnector
+from modules.aegis_ai.connectors.base import LLMConnector, ProviderType
+from modules.aegis_ai.connectors.openai_connector import OpenAIConnector
+from modules.aegis_ai.connectors.anthropic_connector import AnthropicConnector
 
 logger = logging.getLogger("aegis.connectors.registry")
 

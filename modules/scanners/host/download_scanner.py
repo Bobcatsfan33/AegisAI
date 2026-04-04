@@ -1,6 +1,6 @@
 """
-Aegis — Download Directory Scanner & File Integrity Monitor  (v2.11.0)
-=======================================================================
+AegisAI — Download Directory Scanner & File Integrity Monitor  (v2.11.0)
+========================================================================
 
 Two complementary host-level defences:
 

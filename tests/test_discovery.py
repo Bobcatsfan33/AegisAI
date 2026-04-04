@@ -15,7 +15,7 @@ import pytest
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.discovery.engine import (
+from modules.aegis_ai.discovery.engine import (
     DiscoveryEngine,
     AIAsset,
     AssetType,

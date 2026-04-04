@@ -1,4 +1,4 @@
-# Security Policy — Aegis Security Platform
+# Security Policy — AegisAI Platform
 
 ## Supported Versions
 
@@ -42,7 +42,7 @@ Please include:
 
 ## Security Design Principles
 
-Aegis Security is built toward **FedRAMP High** and **DoD IL6** authorization. Our security principles:
+AegisAI is built toward **FedRAMP High** and **DoD IL6** authorization. Our security principles:
 
 1. **Zero trust by default** — no implicit trust between components
 2. **Least privilege** — RBAC enforced at every API endpoint

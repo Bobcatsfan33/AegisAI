@@ -1,6 +1,6 @@
 """
-Aegis Security Platform — Security Headers Middleware
-=====================================================
+AegisAI Platform — Security Headers Middleware
+==============================================
 FedRAMP High / IL6: NIST 800-53 Rev5 SC-8, SC-28, SI-10
 
 Applies the full defensive HTTP header set to every response:

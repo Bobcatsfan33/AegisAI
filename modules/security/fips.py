@@ -1,10 +1,10 @@
 """
-Aegis Security — FIPS 140-2 Enforcement Module  (v2.4.0)
+AegisAI — FIPS 140-2 Enforcement Module  (v2.4.0)
 
 SC-13: Cryptographic Protection
   All cryptographic operations MUST use NIST-approved, FIPS 140-2 validated
   algorithms. This module is the single enforcement point for all crypto in
-  the Aegis Security platform.
+  the AegisAI platform.
 
 IL5 requirements addressed:
   - Runtime FIPS mode detection (Linux kernel FIPS mode + OpenSSL FIPS provider)

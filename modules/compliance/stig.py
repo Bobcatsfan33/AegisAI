@@ -1,5 +1,5 @@
 """
-Aegis — DISA STIG Compliance Checker  (v2.4.0)
+AegisAI — DISA STIG Compliance Checker  (v2.4.0)
 
 Implements checks against:
   • DISA Application Security & Development (ASD) STIG V5R3
@@ -263,7 +263,7 @@ class STIGReport:
             writer.writerow([
                 f"{f.vuln_id}: {f.rule_title}",    # Control Vulnerability Description
                 "",                                  # Security Control Number (N/A for STIG)
-                "Aegis Security Platform",           # Office/Org
+                "AegisAI Platform",                  # Office/Org
                 f"{f.stig_id} ({f.rule_id})",        # Security Checks
                 "Development/Engineering team",      # Resources Required
                 due_date,                            # Scheduled Completion Date
@@ -1129,7 +1129,7 @@ class STIGChecker:
     Covers ASD STIG V5R3 (14 checks) + Container Platform SRG V1R3 (5 checks) = 19 automated checks.
     """
 
-    STIG_NAME    = "Aegis Security Platform — DISA ASD + Container STIG"
+    STIG_NAME    = "AegisAI Platform — DISA ASD + Container STIG"
     STIG_VERSION = "ASD-V5R3 / Container-SRG-V1R3 | Aegis v2.4.0"
 
     def __init__(self):

@@ -10,6 +10,6 @@ NIST 800-53: SC-7 (Boundary Protection), SI-10 (Information Input Validation),
 AC-4 (Information Flow Enforcement).
 """
 
-from modules.guardrails.engine import GuardrailsEngine, GuardrailVerdict, ViolationType
+from modules.aegis_ai.guardrails.engine import GuardrailsEngine, GuardrailVerdict, ViolationType
 
 __all__ = ["GuardrailsEngine", "GuardrailVerdict", "ViolationType"]

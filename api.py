@@ -1,5 +1,5 @@
 """
-Aegis — FastAPI web service  (v2.6.0)
+AegisAI — FastAPI web service  (v2.6.0)
 
 Endpoints:
   GET  /                   → health check (public)
@@ -120,7 +120,7 @@ from modules.security.encryption import (
 from modules.compliance.ssp_generator import AegisSspGenerator
 
 # v3.0.0: AI Security layer — discovery, red team, guardrails, policy, telemetry
-from modules.ai_security_routes import (
+from modules.aegis_ai.routes import (
     ai_security_router,
     initialize_ai_security,
     shutdown_ai_security,

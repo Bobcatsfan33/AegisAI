@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.telemetry.engine import (
+from modules.aegis_ai.telemetry.engine import (
     TelemetryEngine,
     AIEvent,
     EventType,

@@ -1,4 +1,4 @@
-name: Aegis CSPM — CI Pipeline
+name: AegisAI CSPM — CI Pipeline
 
 on:
   push:
@@ -49,14 +49,15 @@ jobs:
             'modules.security.fips',
             'modules.security.encryption',
             'modules.transport.mtls',
-            # v3.0.0: AI Security modules
-            'modules.discovery',
-            'modules.redteam',
-            'modules.guardrails',
-            'modules.policy',
-            'modules.telemetry',
-            'modules.connectors',
-            'modules.ai_security_routes',
+            # v3.0.0: AegisAI (AI Security subcomponent)
+            'modules.aegis_ai',
+            'modules.aegis_ai.discovery',
+            'modules.aegis_ai.redteam',
+            'modules.aegis_ai.guardrails',
+            'modules.aegis_ai.policy',
+            'modules.aegis_ai.telemetry',
+            'modules.aegis_ai.connectors',
+            'modules.aegis_ai.routes',
             'modules.reports.compliance',
             'modules.tenants.middleware',
           ]

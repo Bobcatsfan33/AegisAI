@@ -1,5 +1,5 @@
 """
-Aegis — Infrastructure-as-Code (IaC) Security Scanner  (v2.3.0)
+AegisAI — Infrastructure-as-Code (IaC) Security Scanner  (v2.3.0)
 
 Scans Terraform (.tf), CloudFormation (.yaml/.json), and Kubernetes manifest
 files for security misconfigurations BEFORE they reach a cloud environment.

@@ -1,12 +1,12 @@
 """
-Aegis — Continuous Monitoring (ConMon) Automation  (v2.10.0)
-=============================================================
+AegisAI — Continuous Monitoring (ConMon) Automation  (v2.10.0)
+==============================================================
 Automated ConMon pipeline that satisfies DISA DAAPM v2.2 Section 3.4
 (Continuous Monitoring Strategy) and NIST SP 800-137 requirements.
 
 Pipeline Stages
 ---------------
-1. SCAN    — Trigger all enabled Aegis scanners (cloud, K8s, IaC, ACAS)
+1. SCAN    — Trigger all enabled AegisAI scanners (cloud, K8s, IaC, ACAS)
 2. ASSESS  — Run STIG automated checks + compliance gap report
 3. REPORT  — Generate eMASS-formatted monthly status report + POA&M delta
 4. PUSH    — POST updated controls + POA&M to eMASS REST API (optional)
@@ -573,7 +573,7 @@ class ConMonPipeline:
                 "status":                 p.status,
                 "vulnerabilityDescription": p.weakness,
                 "sourceIdentifyingVulnerability": p.source,
-                "pocOrganization":       "Aegis Security Platform",
+                "pocOrganization":       "AegisAI Platform",
                 "resources":             "Security Operations Team",
                 "scheduledCompletionDate": p.scheduled_completion,
                 "mitigations":           p.mitigation,

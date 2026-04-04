@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.redteam.engine import (
+from modules.aegis_ai.redteam.engine import (
     RedTeamEngine,
     AttackCategory,
     AttackChain,
@@ -29,7 +29,7 @@ from modules.redteam.engine import (
     SYSTEM_PROMPT_EXTRACTION_CHAIN,
     score_response,
 )
-from modules.connectors.base import LLMResponse, ProviderType
+from modules.aegis_ai.connectors.base import LLMResponse, ProviderType
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────

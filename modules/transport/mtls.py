@@ -1,7 +1,7 @@
 """
-Aegis — mTLS Service Mesh  (v2.7.0)
+AegisAI — mTLS Service Mesh  (v2.7.0)
 =====================================
-Mutual TLS enforcement for Aegis CSPM inter-service communication.
+Mutual TLS enforcement for AegisAI CSPM inter-service communication.
 
 Unlike TokenDNA's user-facing mTLS middleware, Aegis mTLS covers two planes:
 

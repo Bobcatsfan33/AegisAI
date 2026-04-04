@@ -1,6 +1,6 @@
 """
-Aegis Security Platform — Secrets Management
-=============================================
+AegisAI Platform — Secrets Management
+=====================================
 FedRAMP High / IL6 compliance: NIST 800-53 Rev5 IA-5, SC-12, SC-28
 
 Centralizes all secret retrieval.  Supports three backends:

@@ -1,8 +1,8 @@
 """
-Aegis — eMASS System Security Plan (SSP) Auto-Generator  (v2.9.0)
+AegisAI — eMASS System Security Plan (SSP) Auto-Generator  (v2.9.0)
 ==================================================================
 Generates a NIST SP 800-18 / DoD eMASS-compatible System Security Plan
-document automatically from Aegis's live compliance posture data.
+document automatically from AegisAI's live compliance posture data.
 
 The SSP describes how each NIST 800-53 Rev5 control is implemented within
 the system boundary — this is the primary artifact a DAA reviews for
@@ -958,7 +958,7 @@ class AegisSspGenerator:
         self._load_posture_data()
 
         boundary = SystemBoundary(
-            system_name          = os.getenv("SSP_SYSTEM_NAME",   "Aegis Security Platform"),
+            system_name          = os.getenv("SSP_SYSTEM_NAME",   "AegisAI Platform"),
             system_abbreviation  = os.getenv("SSP_SYSTEM_ABBR",   "AEGIS"),
             version              = os.getenv("SSP_SYSTEM_VERSION", "2.9.0"),
             classification       = os.getenv("SSP_CLASSIFICATION", "UNCLASSIFIED // FOR OFFICIAL USE ONLY"),

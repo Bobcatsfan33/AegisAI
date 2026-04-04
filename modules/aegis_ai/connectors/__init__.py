@@ -10,7 +10,7 @@ Replaces the existing single openai connector in config.py with a provider-
 agnostic interface that the red team and guardrails engines consume.
 """
 
-from modules.connectors.base import LLMConnector, LLMResponse, ProviderType
-from modules.connectors.registry import ConnectorRegistry
+from modules.aegis_ai.connectors.base import LLMConnector, LLMResponse, ProviderType
+from modules.aegis_ai.connectors.registry import ConnectorRegistry
 
 __all__ = ["LLMConnector", "LLMResponse", "ProviderType", "ConnectorRegistry"]

@@ -1,5 +1,5 @@
 """
-Aegis — Dashboard & Reporting API Routes
+AegisAI — Dashboard & Reporting API Routes
 
 Endpoints:
   GET /api/dashboard/summary      → Counts: events, violations, risk score, tenants
@@ -35,7 +35,7 @@ dashboard_router = APIRouter(prefix="/api", tags=["Dashboard"])
 def _get_telemetry_engine():
     """Return the shared TelemetryEngine instance (imported lazily)."""
     try:
-        from modules.ai_security_routes import _telemetry_engine  # type: ignore[attr-defined]
+        from modules.aegis_ai.routes import _telemetry_engine  # type: ignore[attr-defined]
         return _telemetry_engine
     except Exception:
         return None

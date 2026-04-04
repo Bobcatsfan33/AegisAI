@@ -1,6 +1,6 @@
 """
-Aegis Security Platform — Immutable Audit Log
-==============================================
+AegisAI Platform — Immutable Audit Log
+======================================
 FedRAMP High / IL6 compliance: NIST 800-53 Rev5 AU-2, AU-3, AU-9, AU-12
 
 Every security-relevant event is written to an append-only, hash-chained log.

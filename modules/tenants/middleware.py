@@ -1,6 +1,6 @@
 """
-Aegis — Multi-Tenant Context Middleware  (v3.1.0)
-==================================================
+AegisAI — Multi-Tenant Context Middleware  (v3.1.0)
+===================================================
 FedRAMP High / IL6: NIST 800-53 Rev5 AC-2, AC-3, AC-4, SC-28
 
 Provides per-request tenant isolation via:

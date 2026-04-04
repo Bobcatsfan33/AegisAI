@@ -1,5 +1,5 @@
 """
-Aegis — Kubernetes Security Scanner  (v2.3.0)
+AegisAI — Kubernetes Security Scanner  (v2.3.0)
 
 Checks applied (CIS Kubernetes Benchmark v1.8 + NSA/CISA Hardening Guide):
 

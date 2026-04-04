@@ -1,6 +1,6 @@
 """
-Aegis — Live Network Flow Monitor  (v2.11.0)
-============================================
+AegisAI — Live Network Flow Monitor  (v2.11.0)
+=============================================
 
 Continuously captures active network connections via psutil (no raw-socket /
 root privileges required) and enriches each flow with:

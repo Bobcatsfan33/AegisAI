@@ -7,7 +7,7 @@ Supports Claude Opus 4, Sonnet 4, Haiku 3.5+ via the Anthropic Python SDK.
 import logging
 from typing import Dict, List, Optional
 
-from modules.connectors.base import LLMConnector, LLMResponse, ProviderType
+from modules.aegis_ai.connectors.base import LLMConnector, LLMResponse, ProviderType
 
 logger = logging.getLogger("aegis.connectors.anthropic")
 

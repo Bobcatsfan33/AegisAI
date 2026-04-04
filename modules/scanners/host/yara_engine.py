@@ -1,6 +1,6 @@
 """
-Aegis — YARA Malware Detection Engine  (v2.11.0)
-=================================================
+AegisAI — YARA Malware Detection Engine  (v2.11.0)
+==================================================
 
 Loads YARA rules from the bundled rules/ directory (and any user-supplied
 rules directory) and scans files or byte strings for malware patterns.

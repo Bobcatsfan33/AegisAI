@@ -1,5 +1,5 @@
 """
-Aegis — Dashboard Setup Script
+AegisAI — Dashboard Setup Script
 
 Supports two fully open-source dashboard backends:
   opensearch   OpenSearch Dashboards (Apache 2.0)  ← default / recommended
@@ -451,7 +451,7 @@ def _build_saved_objects() -> list:
         "id":   f"{PREFIX}-dashboard",
         "type": "dashboard",
         "attributes": {
-            "title":       "Aegis — Security Posture",
+            "title":       "AegisAI — Security Posture",
             "description": "Real-time cloud and network security findings, severity breakdown, and remediation tracking.",
             "panelsJSON":  json.dumps(panels),
             "optionsJSON": json.dumps({"useMargins": True, "syncColors": False, "hidePanelTitles": False}),
@@ -533,7 +533,7 @@ def run_setup():
         else "Kibana (Elastic License)"
     )
     print("\n" + "=" * 60)
-    print(f"  Aegis — Dashboard Setup")
+    print(f"  AegisAI — Dashboard Setup")
     print(f"  Backend: {backend_label}")
     print("=" * 60)
 

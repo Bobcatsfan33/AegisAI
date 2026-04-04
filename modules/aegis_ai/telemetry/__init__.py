@@ -10,6 +10,6 @@ NIST 800-53: AU-2 (Event Logging), AU-6 (Audit Record Review/Analysis),
 AU-12 (Audit Record Generation), SI-4 (System Monitoring).
 """
 
-from modules.telemetry.engine import TelemetryEngine, AIEvent, EventType
+from modules.aegis_ai.telemetry.engine import TelemetryEngine, AIEvent, EventType
 
 __all__ = ["TelemetryEngine", "AIEvent", "EventType"]
