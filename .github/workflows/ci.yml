@@ -57,6 +57,10 @@ jobs:
             'modules.connectors.azure_openai',
             'modules.connectors.registry',
             'modules.connectors',
+            'modules.supply_chain.provenance',
+            'modules.supply_chain.attestation',
+            'modules.supply_chain.behavioral',
+            'modules.supply_chain',
           ]
           failed = []
           for m in mods:
