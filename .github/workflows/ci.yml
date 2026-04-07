@@ -51,6 +51,12 @@ jobs:
             'modules.security.fips',
             'modules.security.encryption',
             'modules.transport.mtls',
+            'modules.connectors.base',
+            'modules.connectors.bedrock',
+            'modules.connectors.vertex',
+            'modules.connectors.azure_openai',
+            'modules.connectors.registry',
+            'modules.connectors',
           ]
           failed = []
           for m in mods:
