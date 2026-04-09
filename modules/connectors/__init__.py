@@ -11,7 +11,7 @@ Usage:
     response = connector.complete("Hello, analyze this finding: ...")
 """
 
-from .base import BaseConnector, ConnectorRequest, ConnectorResponse, ConnectorError
+from .base import BaseConnector, ConnectorRequest, ConnectorResponse, ConnectorUsage, ConnectorError
 from .bedrock import BedrockConnector
 from .vertex import VertexAIConnector
 from .azure_openai import AzureOpenAIConnector
@@ -21,6 +21,7 @@ __all__ = [
     "BaseConnector",
     "ConnectorRequest",
     "ConnectorResponse",
+    "ConnectorUsage",
     "ConnectorError",
     "BedrockConnector",
     "VertexAIConnector",
